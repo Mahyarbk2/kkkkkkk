@@ -1,0 +1,1743 @@
+<?php
+ob_start();
+include 'config.php';
+include('lib/jdf.php');
+//========================== // bot // ==============================
+function bot($method,$datas=[]){
+    $ch = curl_init();
+    curl_setopt($ch,CURLOPT_URL,'https://api.telegram.org/bot'.API_KEY.'/'.$method );
+    curl_setopt($ch,CURLOPT_RETURNTRANSFER,true);
+    curl_setopt($ch,CURLOPT_POSTFIELDS,$datas);
+    return json_decode(curl_exec($ch));
+    }
+//========================== // update // ==============================
+$update = json_decode(file_get_contents('php://input'));
+if(isset($update->message)){
+$message = $update->message;
+$message_id = $message->message_id;
+$text = convert($message->text);
+$chat_id = $message->chat->id;
+$tc = $message->chat->type;
+$first_name = $message->from->first_name;
+$from_id = $message->from->id;
+// databse
+$user = mysqli_fetch_assoc(mysqli_query($connect,"SELECT * FROM `user` WHERE `id` = '$from_id' LIMIT 1"));
+$block = mysqli_query($connect,"SELECT * FROM `block` WHERE `id` = '$from_id' LIMIT 1");
+}
+if(isset($update->callback_query)){
+$callback_query = $update->callback_query;
+$callback_query_id = $callback_query->id;
+$data = $callback_query->data;
+$fromid = $callback_query->from->id;
+$messageid = $callback_query->message->message_id;
+$chatid = $callback_query->message->chat->id;
+// databse
+$user = mysqli_fetch_assoc(mysqli_query($connect,"SELECT * FROM `user` WHERE `id` = '$fromid' LIMIT 1"));
+$block = mysqli_query($connect,"SELECT * FROM `block` WHERE `id` = '$fromid' LIMIT 1");
+}
+if(isset($update->channel_post)){
+$channel_post = $update->channel_post;
+$channel_post_message_id = $channel_post->message_id;
+$channel_post_chat_id = $channel_post->chat->id;
+$channel_post_chat_username = $channel_post->chat->username;
+$channel_post_chat_type = $channel_post->chat->type;
+// databse
+$user = mysqli_fetch_assoc(mysqli_query($connect,"SELECT * FROM `channel` WHERE `channel` = '$channel_post_chat_id' LIMIT 1"));
+}
+//==============================// function //=======================================
+function curl($url){
+    $ch = curl_init();
+    curl_setopt($ch,CURLOPT_URL, $url);
+    curl_setopt($ch,CURLOPT_RETURNTRANSFER,true);
+    return json_decode(curl_exec($ch));
+    }
+function convert($string) {
+    $persian = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+    $arabic = ['٩', '٨', '٧', '٦', '٥', '٤', '٣', '٢', '١','٠'];
+    $num = range(0, 9);
+    $convertedPersianNums = str_replace($persian, $num, $string);
+    $englishNumbersOnly = str_replace($arabic, $num, $convertedPersianNums);
+    return $englishNumbersOnly;
+}
+function RandomString($length = 8){
+ $am = array_merge(range('A','Z'), range('a','z'), range(0, 9));
+ for(; @$c < $length; @++$c)
+  @$o .= $am[array_rand($am)];
+ return $o;
+}
+//==============================// keybord and Text //=======================================
+$home = json_encode([
+        'keyboard'=>[
+		[['text'=>'👁‍🗨 سفارش بازدید'],['text'=>'❤️ لایک و رأی']],
+		[['text'=>'🚀 بازدید خودکار'],['text'=>'👁 بازدید همزمان']],
+		[['text'=>'📊 سفارشات من'],['text'=>'➕ افزایش موجودی'],['text'=>'👤 حساب کاربری']],
+		[['text'=>'☎️ پشتیبانی'],['text'=>'🛒 تراکنش ها'],['text'=>'↗️ انتقال']],
+		],
+          'resize_keyboard'=>true,
+       		]);
+$back = json_encode([
+        'keyboard'=>[
+		[['text'=>'🔙 بازگشت']],
+		],
+         'resize_keyboard'=>true,
+       		]);
+$speed = json_encode([
+        'keyboard'=>[
+		[['text'=>'حداکثر سرعت'],['text'=>'تنظیم سرعت']],
+		[['text'=>'سریع'],['text'=>'متوسط'],['text'=>'آهسته']],
+		[['text'=>'🔙 بازگشت']],
+		],
+         'resize_keyboard'=>true,
+       		]);
+$speedlike = json_encode([
+        'keyboard'=>[
+		[['text'=>'حداکثر سرعت']],
+		[['text'=>'هر 2 دقیقه 1 لایک'],['text'=>'هر 5 دقیقه 1 لایک']],
+		[['text'=>'هر 15 دقیقه 1 لایک'],['text'=>'هر 30 دقیقه 1 لایک']],
+		[['text'=>'🔙 بازگشت']],
+		],
+         'resize_keyboard'=>true,
+       		]);			
+$start = "👈🏻 با $botname در کنار شما هستیم تا کمک کنیم به صورت رایگان بازدید پست های تلگرامی شمارا افزایش دهیم .
+
+👍🏻 علاوه بر افزایش بازدید پست های شما ما میتوانیم ، لایک و نظر سنجی های پست های شمارا نیز افزایش دهیم .
+👇🏻 برای ادامه یکی از دکمه های زیر را انتخاب نمایید";	
+$gift = "🎊 با تشکر از عضویت شما ، $_gift تومان موجودی به صورت هدیه به حسابتان افزوده شد .";		
+//===========================// block //===========================
+if (mysqli_num_rows($block) > 0) exit();
+//===========================// start //===========================
+elseif(preg_match('/^(\/start) (.*)/',$text , $prameter) and $user['id'] != true){
+	$connect->query("INSERT INTO `user` (`id` , `coin` , `inviter`) VALUES ('$from_id' , '$_gift' , '$prameter[2]')");
+	if(bot('getChatMember',['chat_id'=>"@$channel",'user_id'=>$prameter])->result->status != 'left'){
+	bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>$start,
+    'reply_to_message_id'=>$message_id,
+    'reply_markup'=>$home
+    		]);
+	bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>$gift,
+    		]);
+$name = str_replace(['`','*','_','[',']','(',')'],null,$first_name);
+$user = mysqli_fetch_assoc(mysqli_query($connect,"SELECT * FROM `user` WHERE `id` = '$prameter[2]' LIMIT 1"));
+$member = $user['member'] + 1;
+$coin = $user['coin'] + $_member;
+bot('sendmessage',[
+	'chat_id'=>$prameter[2],
+	'text'=>"🌟 تبریک ! کاربر [$name](tg://user?id=$from_id) با استفاده از لینک دعوت شما وارد ربات شده
+	
+⬆️ مبلغ $_member تومان به موجودی شما اضافه شد 
+☑️ در صورت خرید توسط کسانی که شما دعوت میکنید $_porsant درصد نیز به شما هدیه تعلق میگیرد
+
+👥 تعداد زیر مجموعه ها : $member
+💰 موجودی حساب شما : $coin تومان",
+	'parse_mode'=>'Markdown',
+	  	]);
+$connect->query("UPDATE `user` SET `member` = '$member' , `coin` = '$coin' WHERE `id` = '$prameter[2]' LIMIT 1");	
+}else{
+bot('sendmessage',[
+        'chat_id'=>$chat_id,
+        "text"=>"☑️ برای استفاده از ربات « $botname » ابتدا باید وارد کانال  « $channelname » شوید
+❗️ برای دریافت آموزش ها ،  اطلاعیه ها و گزارشات شما باید عضو کانال ربات شوید
+		
+📣 @$channel
+
+👇 بعد از عضویت در کانال روی دکمه « ✅ تایید عضویت » بزنید 👇",
+'reply_to_message_id'=>$message_id,
+'reply_markup'=>json_encode([
+    'inline_keyboard'=>[
+			[['text'=>'✅ تایید عضویت','callback_data'=>'join']],
+              ]
+        ])
+			]);
+   }
+}   
+//===========================// back //===========================
+elseif($text == '🔙 بازگشت'){
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"⬅️ به منوی اصلی بازگشتید
+	
+$start",
+'reply_to_message_id'=>$message_id,
+     'reply_markup'=>$home
+            ]);
+$connect->query("UPDATE `user` SET `step` = 'none' WHERE `id` = '$from_id' LIMIT 1");	
+}
+//===========================// coin step //===========================
+elseif($user['step'] == 'sendcoin'){
+	if(is_numeric($texr) and $user['coin'] >= $text and $text > 100){
+	$coin = $user['coin'] - $text;
+	$connect->query("UPDATE `user` SET `step` = 'none' , `coin` = '$coin' WHERE `id` = '$from_id' LIMIT 1");
+			bot('sendmessage',[       
+			'chat_id'=>$chat_id,
+			'text'=>"✅ انتقال موجودی با موفقیت انجام شد
+			
+↗️ موجودی انتقال داده شده : $text
+💰 موجودی جدید شما : $coin تومان
+👤 کاربر مورد نظر : [{$user['data']}](tg://user?id={$user['data']})",
+          'parse_mode'=>'Markdown',
+          'reply_to_message_id'=>$message_id,
+          'reply_markup'=>$home
+	         ]);	
+ $userdata = mysqli_fetch_assoc(mysqli_query($connect,"SELECT * FROM `user` WHERE `id` = '{$user['data']}' LIMIT 1"));
+ $coin = $userdata['coin'] + $text;
+ 			bot('sendmessage',[       
+			'chat_id'=>$user['data'],
+			'text'=>"✅ $text تومان موجودی از طرف [$from_id](tg://user?id=$from_id) برای شما انتقال داده شد .
+💰 موجودی جدید شما : $coin تومان",
+          'parse_mode'=>'Markdown',
+	         ]);
+ $connect->query("UPDATE `user` SET `coin` = '$coin' WHERE `id` = '{$user['data']}' LIMIT 1");
+}else
+			bot('sendmessage',[       
+			'chat_id'=>$chat_id,
+			'text'=>"❗️ خطا ، مبلغ وارد شده نادرست یا از موجودی حساب شما بیشتر است
+			
+👇🏻 مبلغ مورد نظر جهت انتقال را به تومان وارد نمایید
+💰 موجودی حساب شما {$user['coin']} تومان است",
+           'reply_to_message_id'=>$message_id,
+           'reply_markup'=>$back
+	          ]);	
+}
+elseif ($user['step'] == 'seenpost') {
+    if($message->audio != true){
+      $connect->query("UPDATE `user` SET `step` = 'none' WHERE `id` = '$from_id' LIMIT 1");
+    if($message->forward_from_chat == true){
+      $id = bot('ForwardMessage',[
+      'chat_id'=>"@$channelorder",   
+      'from_chat_id'=>$from_id,
+      'message_id'=>$message_id,
+      ])->result->message_id;
+      $link = "https://t.me/$channelorder/$id";
+    }else{
+      $exlink = explode('/', $text);
+      $channelorder = $exlink[count($exlink) - 2];
+      $id = end($exlink);
+      $link = "https://t.me/$channelorder/$id";
+    } 
+      $explode = explode('^',$user['data']);
+      $seen = file_get_contents("$webapi/seen.php?channel=@$channelorder&post=$id");  
+      $result = file_get_contents("https://starseen.net/web.php?apikey=$apikey&type=view&count=$explode[0]&speed=0&period=0&channel=$channelorder&id=$id");
+      $result1 = json_decode($result,true);
+      $resul1t = $result1["result"];
+      $order_id1 = $result1["order"];
+      $seenstart = $result1["seenstart"];
+      if($resul1t == 'ok'){
+      $amount = $explode[0] * $_seen;
+      $order_id29 = RandomString(10);
+      $connect->query("UPDATE `user` SET `coin` = `coin` - $amount WHERE `id` = '$from_id' LIMIT 1");  
+      $startorder = ($explode[1] == 0)?'فوری':"بعد از $explode[1] دقیقه";
+      $speed = ($explode[2] == 0)?'حداکثر سرعت':"هر $explode[2] دقیقه $explode[3] بازدید";
+      bot('sendmessage',[
+      'chat_id'=>$chat_id,
+        'text'=>"✅️ سفارش بازدید با شماره پیگیری $order_id29 ثبت شد .
+    
+    ⚡️ سرعت تکمیل : $speed
+    ⏱ زمان شروع سفارش : $startorder
+    💰 هزینه سفارش : $amount تومان
+    👁‍🗨 تعداد بازدید درخواستی : $explode[0]
+    👁 بازدید فعلی : $seenstart",
+    'reply_to_message_id'=>$message_id,
+        'reply_markup'=>$home
+                ]);    
+    $connect->query("INSERT INTO `orderseen` (`key` , `id` , `amount` , `speed` , `view` , `link` , `time`) VALUES ('{$result->order_id}' ,'$from_id' , '$amount' , '$speed' , '$explode[0]' , '$link' , '".jdate('j F')." در ساعت ".jdate('H:i:s')."')");    
+    }else{
+    bot('sendmessage',[
+      'chat_id'=>$chat_id,
+      'text'=>'❗️ خطا ، پست شما نامعتبر است یا مشکلی در انجام سفارش ایجاد شده است
+    ⬅️ پست مورد نظر را از کانال جهت افزایش بازدید , به ربات فوروارد نمایید
+    
+    👮🏻 در صورت بروز هرگونه مشکل و یا انجام نشدن سفارش کافیست با پشتیبانی در تماس باشید .',
+        'reply_to_message_id'=>$message_id,
+        'reply_markup'=>$back
+                ]);
+        $connect->query("UPDATE `user` SET `step` = 'seenpost' WHERE `id` = '$from_id' LIMIT 1");      
+    }
+    }else      
+    bot('sendphoto',[
+      'chat_id'=>$chat_id,
+      'photo'=>'https://t.me/justfortestjiji/959',
+      'caption'=>'❗️ پست ارسال شده معتبر نیست
+    
+    🎵 در صورتی که مایلید پست موسیقی را ثبت کنید، توجه داشته باشید به جای فوروارد، لینک پست مورد نظر را ارسال کنید .
+    ⚠️ توجه کنید که در صورتی که کپی کردن لینک وجود ندارد , باید از تلگرام های رسمی و متعبر استفاده کنید',
+        'reply_to_message_id'=>$message_id,
+        'reply_markup'=>$back
+                ]);  
+    }
+    elseif(preg_match('/^bu_(.*)/', $data) and $user['step'] == 'likebutton'){  
+        $connect->query("UPDATE `user` SET `step` = 'none' WHERE `id` = '$fromid' LIMIT 1");
+        bot('deletemessage',['chat_id'=> $chatid,'message_id'=> $messageid ]);
+        $explode = explode('^',$user['data']);
+        $match = explode('_',$data,4);
+        $assd = $explode[2];
+        $sndf = $explode[3];
+        $link = "https://t.me/$explode[2]/$explode[3]";
+        $result = curl("https://starseen.net/web.php?apikey=$apikey&type=like&count=$explode[0]&row=$match[1]&column=$match[2]&channel=$assd&id=$sndf");
+        if($result->result == 'ok'){
+        $amount = $explode[0] * $_like;
+        $order_id89 = RandomString(10);
+        $connect->query("UPDATE `user` SET `coin` = `coin` - $amount WHERE `id` = '$fromid' LIMIT 1");
+        $speed = ($explode[1] == 1)?'حداکثر سرعت':"هر $explode[1] دقیقه 1 لایک";
+        bot('sendmessage',[
+        'chat_id'=>$chatid,
+          'text'=>"✅️ سفارش لایک (رأی) با شماره پیگیری $order_id89 ثبت شد .
+      
+      ⚡️ سرعت تکمیل : $speed
+      💰 هزینه سفارش : $amount تومان
+      👍🏻 تعداد درخواست لایک : $explode[0]
+      ✅ گزینه انتخابی : $match[3]",
+          'reply_markup'=>$home
+                  ]);    
+      $connect->query("INSERT INTO `orderlike` (`key` , `id` , `amount` , `speed` ,`like` , `link` , `time`) VALUES ('{$result->order_id}' ,'$fromid' , '$amount' , '$speed' , '$explode[0]' , '$link' , '".jdate('j F')." در ساعت ".jdate('H:i:s')."')");    
+      }else{
+      bot('sendmessage',[
+        'chat_id'=>$chatid,
+        'text'=>'❗️ خطا ، مشکلی در انجام سفارش ایجاد شده است
+      ⬅️ پست (نظر سنجی) مورد نظر را جهت افزایش لایک (رأی) از یک کانال عمومی به ربات فوروارد کنید
+      
+      👮🏻 در صورت بروز هرگونه مشکل و یا انجام نشدن سفارش کافیست با پشتیبانی در تماس باشید .',
+          'reply_markup'=>$back
+                  ]);  
+        $connect->query("UPDATE `user` SET `step` = 'likebutton' WHERE `id` = '$fromid' LIMIT 1");
+      } 
+      }
+//===========================
+elseif ($user['step'] == 'seentpost') {
+    if($message->audio != true){
+      $connect->query("UPDATE `user` SET `step` = 'seentpost WHERE `id` = '$from_id' LIMIT 1");
+    if($message->forward_from_chat == true){
+      $id = bot('ForwardMessage',[
+      'chat_id'=>"@$channelorder",   
+      'from_chat_id'=>$from_id,
+      'message_id'=>$message_id,
+      ])->result->message_id;
+      $link = "https://t.me/$channelorder/$id";
+    }else{
+      $exlink = explode('/', $text);
+      $channelorder = $exlink[count($exlink) - 2];
+      $id = end($exlink);
+      $link = "https://t.me/$channelorder/$id";
+    } 
+      $explode = explode('^',$user['data']);
+      $seen = file_get_contents("$webapi/seen.php?channel=@$channelorder&post=$id");  
+      $result = file_get_contents("https://starseen.net/web.php?apikey=$apikey&type=view&count=$explode[0]&speed=0&period=0&channel=$channelorder&id=$id");
+      $result1 = json_decode($result,true);
+      $resul1t = $result1["result"];
+      $order_id6 = $result1["order"];
+      $seenstart = $result1["seenstart"];
+      if($resul1t == 'ok'){
+      $amount = $explode[0] * $_seen;
+      $order_id80 = RandomString(10);
+      $connect->query("UPDATE `user` SET `coin` = `coin` - $amount WHERE `id` = '$from_id' LIMIT 1");  
+      $startorder = ($explode[1] == 0)?'فوری':"بعد از $explode[1] دقیقه";
+      $speed = ($explode[2] == 0)?'حداکثر سرعت':"هر $explode[2] دقیقه $explode[3] بازدید";
+      bot('sendmessage',[
+      'chat_id'=>$chat_id,
+        'text'=>"✅️ سفارش بازدید با شماره پیگیری $order_id80 ثبت شد .
+    
+    ⚡️ سرعت تکمیل : $speed
+    ⏱ زمان شروع سفارش : $startorder
+    💰 هزینه سفارش : $amount تومان
+    👁‍🗨 تعداد بازدید درخواستی : $explode[0]
+    👁 بازدید فعلی : $seenstart",
+    'reply_to_message_id'=>$message_id,
+    'reply_markup'=>$back
+                ]);    
+    $connect->query("INSERT INTO `orderseen` (`key` , `id` , `amount` , `speed` , `view` , `link` , `time`) VALUES ('{$result->order_id}' ,'$from_id' , '$amount' , '$speed' , '$explode[0]' , '$link' , '".jdate('j F')." در ساعت ".jdate('H:i:s')."')"); 
+    $connect->query("UPDATE `user` SET `step` = 'seentpost' WHERE `id` = '$from_id' LIMIT 1");
+    }else{
+    bot('sendmessage',[
+      'chat_id'=>$chat_id,
+      'text'=>'❗️ خطا ، پست شما نامعتبر است یا مشکلی در انجام سفارش ایجاد شده است
+    ⬅️ پست مورد نظر را از کانال جهت افزایش بازدید , به ربات فوروارد نمایید
+    
+    👮🏻 در صورت بروز هرگونه مشکل و یا انجام نشدن سفارش کافیست با پشتیبانی در تماس باشید .',
+        'reply_to_message_id'=>$message_id,
+        'reply_markup'=>$back
+                ]);
+        $connect->query("UPDATE `user` SET `step` = 'seenpost' WHERE `id` = '$from_id' LIMIT 1");      
+    }
+    }else      
+    bot('sendphoto',[
+      'chat_id'=>$chat_id,
+      'photo'=>'https://t.me/justfortestjiji/959',
+      'caption'=>'❗️ پست ارسال شده معتبر نیست
+    
+    🎵 در صورتی که مایلید پست موسیقی را ثبت کنید، توجه داشته باشید به جای فوروارد، لینک پست مورد نظر را ارسال کنید .
+    ⚠️ توجه کنید که در صورتی که کپی کردن لینک وجود ندارد , باید از تلگرام های رسمی و متعبر استفاده کنید',
+        'reply_to_message_id'=>$message_id,
+        'reply_markup'=>$back
+                ]);  
+    }
+//===========================// join //===========================
+elseif(bot('getChatMember',['chat_id'=>"@$channel",'user_id'=>$from_id])->result->status == 'left'){
+ bot('sendmessage',[
+        'chat_id'=>$chat_id,
+        "text"=>"☑️ برای استفاده از ربات « $botname » ابتدا باید وارد کانال  « $channelname » شوید
+❗️ برای دریافت آموزش ها ،  اطلاعیه ها و گزارشات شما باید عضو کانال ربات شوید
+		
+📣 @$channel
+
+👇 بعد از عضویت در کانال روی دکمه « ✅ تایید عضویت » بزنید 👇",
+'reply_to_message_id'=>$message_id,
+'reply_markup'=>json_encode([
+    'inline_keyboard'=>[
+			[['text'=>'✅ تایید عضویت','callback_data'=>'join']],
+              ]
+        ])
+			]);
+if($user['id'] != true) {
+	bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>$gift,
+    		]);
+$connect->query("INSERT INTO `user` (`id` , `coin`) VALUES ('$from_id' , '$_gift')");
+}
+$connect->query("UPDATE `user` SET `step` = 'none' WHERE `id` = '$from_id' LIMIT 1");
+}
+//========================== // order // ==============================
+elseif($text == '👁‍🗨 سفارش بازدید'){
+if($user['coin'] >= 5){
+$max = floor($user['coin'] / $_seen);
+$bazdid = $_seen * 1000;
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"👁‍ تعداد بازدید دلخواه را به صورت عدد بین 10 الی $maxorder وارد نمایید 👇🏻
+	
+❗️ موجودی حساب شما {$user['coin']} تومان هست و میتوانید حداکثر $max بازدید را سفارش دهید .
+• هزینه هر 1000 بازدید برابر با $bazdid تومان است",
+'reply_to_message_id'=>$message_id,
+'reply_markup'=>$back,
+            ]);	
+$connect->query("UPDATE `user` SET `step` = 'seenamount' WHERE `id` = '$from_id' LIMIT 1");
+}else
+	bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"❗️ موجودی حساب شما کافی نمیباشد ، برای انجام سفارش نیاز به حداقل 5 تومان موجودی دارید .
+💰 موجودی حساب شما : {$user['coin']} تومان",
+    'reply_to_message_id'=>$message_id,
+            ]);	
+}
+elseif($text == '❤️ لایک و رأی'){
+if($user['coin'] >= $_like){
+$max = floor($user['coin'] / $_like);
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"👍🏻 تعداد لایک (رأی) مورد نظر را به صورت عددی بین 1 الی $maxorder وارد کنید 👇🏻
+	
+• با استفاده از این بخش میتوانید برای تمامی پستها ، لایک و رأی سفارش دهید به شرط آنکه پست در کانال عمومی باشد و یا یک نظر سنجی (Poll) باشد .
+	
+❗️ موجودی حساب شما {$user['coin']} تومان هست و میتوانید حداکثر $max لایک را سفارش دهید
+🎁 با ثبت سفارش لایک ، پست مربوطه به همان مقدار بازدید هم خواهد خورد
+• هزینه هر عدد لایک برابر با $_like تومان است",
+'reply_to_message_id'=>$message_id,
+'reply_markup'=>$back,
+            ]);	
+$connect->query("UPDATE `user` SET `step` = 'likeamount' WHERE `id` = '$from_id' LIMIT 1");
+}else
+	bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"❗️ موجودی حساب شما کافی نمیباشد ، برای انجام سفارش لایک نیاز به حداقل $_like تومان موجودی دارید .
+💰 موجودی حساب شما : {$user['coin']} تومان",
+    'reply_to_message_id'=>$message_id,
+            ]);	
+}
+//===================================
+elseif($text == '👁 بازدید همزمان'){
+if($user['coin'] >= 5){
+$max = floor($user['coin'] / $_seen);
+$bazdid = $_seen * 1000;
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"👈🏻 در این بخش شما میتوانید برای چندین پست به صورت همزمان سفارش ثبت کنید
+👁‍ تعداد بازدید دلخواه را به صورت عدد بین 10 الی $maxorder وارد نمایید 👇🏻
+ 
+❗️ موجودی حساب شما {$user['coin']} تومان هست و میتوانید حداکثر $max بازدید را سفارش دهید .
+• هزینه هر 1000 بازدید برابر با $bazdid تومان است",
+'reply_to_message_id'=>$message_id,
+'reply_markup'=>$back,
+            ]);	
+$connect->query("UPDATE `user` SET `step` = 'seentamount' WHERE `id` = '$from_id' LIMIT 1");
+}else
+	bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"❗️ موجودی حساب شما کافی نمیباشد ، برای انجام سفارش نیاز به حداقل 5 تومان موجودی دارید .
+💰 موجودی حساب شما : {$user['coin']} تومان",
+    'reply_to_message_id'=>$message_id,
+            ]);	
+}
+
+//========================== // auto // ==============================
+elseif($text == '🚀 بازدید خودکار'){
+	$orderchannel = mysqli_num_rows(mysqli_query($connect,"select `id` from `channel` WHERE `id` = '$from_id'"));
+    bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"⬆️ با استفاده از این بخش میتوانید ربات را به گونه ای تنظیم نمایید تا به محض انتشار پست جدید در کانال، فرایند افزایش بازدید آن به طور خودکار آغاز شود .
+
+🎯 تعداد کانال های ثبت شده : $orderchannel
+👇🏻 جهت ثبت یا حذف کانال میتوانید از دکمه های زیر استفاده کنید",
+    'reply_to_message_id'=>$message_id,
+    'reply_markup'=>json_encode([
+        'keyboard'=>[
+		[['text'=>'🎯 افزودن کانال جدید'],['text'=>'📢 کانال های ثبت شده']],
+		[['text'=>'🔙 بازگشت']],
+		],
+        'resize_keyboard'=>true,
+       		]),
+            ]);	
+}
+elseif($text == '📢 کانال های ثبت شده'){
+$order = mysqli_query($connect,"SELECT * FROM `channel` WHERE `id` = '$from_id'");
+if(mysqli_num_rows($order) > 0){
+while($row = mysqli_fetch_assoc($order)){
+$explode = explode('^',$row['speed']);
+$start = ($explode[0] == 0)?'فوری':"بعد از $explode[0] دقیقه";
+$speed = ($explode[1] == 0)?'حداکثر سرعت':"هر $explode[1] دقیقه $explode[2] بازدید";
+$title = bot('getchat',['chat_id'=>$row['channel']])->result->title;
+$result = $result."✅ نام کانال : $title\n👁‍🗨 تعداد بازدید خودکار : {$row['view']}\n⏱ زمان شروع سفارش : $start\n⚡️ سرعت انجام سفارش : $speed\n❌ برای حذف کانال /del_".abs($row['channel'])."\n━ ━ ━\n";
+}
+    bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"👇🏻 لیست کانالهای ثبت شده توسط شما
+❗️ توجه داشته باشید جزئیات سفارشات ثبت شده در پیگیری سفارشات در دسترس است
+	
+$result",
+    'reply_to_message_id'=>$message_id,
+            ]);	
+}else
+	    bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>'❗️ شما تا کنون کانالی را جهت بازدید خودکار ثبت نکرده اید
+👈🏻 برای شروع کافیست از دکمه "🎯 افزودن کانال جدید" استفاده نمایید و مراحل را ادامه دهید .',
+    'reply_to_message_id'=>$message_id,
+            ]);	
+}
+elseif($text == '🎯 افزودن کانال جدید'){
+if($user['coin'] >= 10){
+    bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"✅ برای شروع بازدید خودکار ، لطفا ربات @$usernamebot را در کانال ادمین کرده و سپس یک پست از کانال را به ربات فوروارد نمایید
+ 
+❗️ چرا باید ادمین کنید؟ ربات تنها میتواند در صورتی سفارش خودکار رو انجام دهد که در کانال ادمین باشد .
+<a href='$web/help'>👮🏻 آموزش نحوه ادمین کردن ربات</a>",
+   'parse_mode'=>'HTML',
+   'reply_to_message_id'=>$message_id,
+   'reply_markup'=>$back,
+            ]);	
+$connect->query("UPDATE `user` SET `step` = 'setchannel' WHERE `id` = '$from_id' LIMIT 1");
+}else
+	    bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"❗️ موجودی حساب شما کافی نمیباشد ، برای انجام سفارش نیاز به حداقل 10 تومان موجودی دارید .
+💰 موجودی حساب شما : {$user['coin']} تومان",
+    'reply_to_message_id'=>$message_id,
+            ]);	
+}
+elseif(preg_match('/^\/del_(.*)/', $text , $match)){
+if(mysqli_fetch_assoc(mysqli_query($connect,"SELECT * FROM `channel` WHERE `id` = '$from_id' AND `channel` = '-$match[1]' LIMIT 1")) == true){
+	$title = bot('getchat',['chat_id'=>-$match[1]])->result->title;
+	bot('sendmessage',[
+	'chat_id'=>$chat_id,
+    'text'=>"☑️ کاناله $title با موفقیت از لیست بازدید خودکار حذف شد .",
+    'reply_to_message_id'=>$message_id,
+    		]);
+$connect->query("DELETE FROM `channel` WHERE `channel` = '-$match[1]' LIMIT 1");
+}else
+		bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>'❌ خطا ، کانال در لیست بازدید های خودکار وجود ندارد',
+    'reply_to_message_id'=>$message_id,
+    'reply_markup'=>$home,
+    		]);	
+}
+//========================== // order list // ==============================
+elseif($text == '📊 سفارشات من'){
+$orderseen = mysqli_num_rows(mysqli_query($connect,"select `id` from `orderseen` WHERE `id` = '$from_id'"));
+$orderlike = mysqli_num_rows(mysqli_query($connect,"select `id` from `orderlike` WHERE `id` = '$from_id'"));
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"👇🏻 بخش مورد نظر را جهت پیگیری و مشاهده سفارشات انتخاب کنید
+
+👁 تعداد سفارشات بازدید : $orderseen
+👍🏻 تعداد سفارشات لایک : $orderlike",
+'reply_to_message_id'=>$message_id,
+'reply_markup'=>json_encode([
+        'keyboard'=>[
+		[['text'=>'❤️ سفارشات لایک'],['text'=>'👁‍🗨 سفارشات بازدید']],
+		[['text'=>'🔙 بازگشت']],
+		],
+        'resize_keyboard'=>true,
+       		]),
+            ]);					
+}
+elseif($text == '👁‍🗨 سفارشات بازدید'){
+$order = mysqli_query($connect,"SELECT * FROM `orderseen` WHERE `id` = '$from_id' ORDER BY `key` DESC LIMIT 10");
+if(mysqli_num_rows($order) > 0){
+while($row = mysqli_fetch_assoc($order)){
+$stats = ($row['stats'] == 1)?'تکمیل شده':'تکمیل نشده !';
+$result = $result."🆔 شناسه سفارش 👈🏻 {$row['key']}\n⚡️ سرعت تکمیل : {$row['speed']}\n⏱ زمان : {$row['time']}\n💰 هزینه سفارش : {$row['amount']} تومان\n👁‍🗨 تعداد بازدید درخواستی : {$row['view']}\n✅ وضعیت : $stats\n━ ━ ━\n";
+}
+    bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"🛒 لیست ده سفارش بازدید اخیر شما
+	
+$result",
+    'reply_to_message_id'=>$message_id,
+            ]);	
+}else
+	 bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>'❗️ شما تا کنون سفارش بازدید ثبت نکرده اید
+👈🏻 برای شروع کافیست از دکمه "👁‍🗨 سفارش بازدید" در منوی اصلی استفاده نمایید و مراحل را ادامه دهید .',
+    'reply_to_message_id'=>$message_id,
+            ]);	
+}
+elseif($text == '❤️ سفارشات لایک'){
+$order = mysqli_query($connect,"SELECT * FROM `orderlike` WHERE `id` = '$from_id' ORDER BY `key` DESC LIMIT 10");
+if(mysqli_num_rows($order) > 0){
+while($row = mysqli_fetch_assoc($order)){
+$stats = ($row['stats'] == 1)?'تکمیل شده':'تکمیل نشده !';
+$result = $result."🆔 شناسه سفارش 👈🏻 {$row['key']}\n⚡️ سرعت تکمیل : {$row['speed']}\n⏱ زمان : {$row['time']}\n💰 هزینه سفارش : {$row['amount']} تومان\n👍🏻 تعداد لایک : {$row['like']}\n✅ وضعیت : $stats\n━ ━ ━\n";
+}
+    bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"🛒 لیست ده سفارش اخیر لایک شما
+	
+$result",
+    'reply_to_message_id'=>$message_id,
+            ]);	
+}else
+	 bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>'❗️ شما تا کنون سفارش لایک ثبت نکرده اید
+👈🏻 برای شروع کافیست از دکمه "❤️ لایک و رأی" در منوی اصلی استفاده نمایید و مراحل را ادامه دهید .',
+    'reply_to_message_id'=>$message_id,
+            ]);	
+}
+//========================== // charge amount // ==============================
+elseif($text == '➕ افزایش موجودی'){
+$allbuy = mysqli_num_rows(mysqli_query($connect,"select `id` from `buy` WHERE `id` = '$from_id'"));
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"👇🏻 یکی از بخش های زیر را جهت افزایش موجودی انتخاب کنید
+	
+💰 موجودی حساب شما : {$user['coin']} تومان
+🛍 تعداد خرید ها : $allbuy 	
+	
+⬆️ با دعوت دوستان خود به ربات با لینک اختصاصی خود میتوانید به ازای هر نفر $_member تومان موجودی دریافت کنید
+ℹ️ جهت افزایش موجودی به مبلغ دلخواه به صورت آفلاین یا آنلاین میتوانید از خرید موجودی استفاده کنید",
+'reply_to_message_id'=>$message_id,
+'reply_markup'=>json_encode([
+        'keyboard'=>[
+		[['text'=>'🗣 دعوت دیگران'],['text'=>'💳 خرید موجودی']],
+		[['text'=>'🔙 بازگشت']],
+		],
+        'resize_keyboard'=>true,
+       		])
+            ]);					
+}
+elseif($text == '💳 خرید موجودی'){
+	$bazdid = $_seen * 1000;
+    bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"👇🏻 برای افزایش موجودی حساب مبلغ موردنظر خود را به تومان وارد نمایید
+
+❗️ توجه کنید که مبلغ را به عدد وارد کنید و حداقل میتوانید 1000 و حداکثر 200000 تومان حساب خود را شارژ کنید
+
+👈🏻  تعرفه هر 1000 بازدید 👁‍🗨 $bazdid تومان 
+👈🏻 تعرفه هر 1 لایک ❤️ $_like تومان",
+'reply_to_message_id'=>$message_id,
+'reply_markup'=>json_encode([
+        'keyboard'=>[
+		[['text'=>'🔙 بازگشت'],['text'=>'💳 پرداخت آفلاین']],
+		],
+        'resize_keyboard'=>true,
+       		])
+            ]);
+$connect->query("UPDATE `user` SET `step` = 'pay' WHERE `id` = '$from_id' LIMIT 1");
+}
+elseif($text == '🗣 دعوت دیگران'){
+	$id = bot('sendphoto',[
+	'chat_id'=>$chat_id,
+	'photo'=>$baner,
+	'caption'=>"⚡️ با $botname به راحتی بازدید بگیرید 
+	
+👁‍🗨 افزایش بازدید پستهای تلگرامی
+❤️ افزایش لایک و رأی تلگرام
+🕓 با قابلیت تنظیم سرعت و زمان 
+👥 زیرمجموعه گیری و دریافت هدیه
+💯 رایگان ، سریع ، بدون آفلاینی
+🔐 پرداخت مطمئن و 100% امن
+
+👇🏻 همین الان وارد این ربات فوق العاده شو
+
+t.me/$usernamebot?start=$from_id",
+    		])->result->message_id;
+    bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"👆🏻 بنر بالا حاوی لینک دعوت شما به ربات است
+	
+🎁 در صورت خرید توسط کسانی که شما دعوت میکنید $_porsant درصد از مبلغ خریداری شده به شما هدیه داده میشود
+💰 همچنین با دعوت دوستان به ربات با لینک اختصاصی خود میتوانید به ازای هر نفر $_member تومان موجودی دریافت کنید
+
+☑️ پس با زیرمجموعه گیری براحتی میتوانید موجودی حساب خود را رایگان! افزایش دهید .
+
+💰 موجودی حساب شما : {$user['coin']} تومان
+👥 تعداد زیر مجموعه ها : {$user['member']} نفر",
+	'reply_to_message_id'=>$id,
+    		]);
+}
+elseif($text == '💳 پرداخت آفلاین'){
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"ℹ️ درصورتی که امکان خرید به صورت آنلاین و با رمز دوم ندارید میتوانید پرداخت را آفلاین انجام دهید
+
+💳 میزان موجودی که نیاز دارید را به صورت کارت به کارت به حساب زیر انتقال دهید .
+📲 اسکرین شات پرداخت را برای پشتیبانی ارسال کنید ، تا موجودی حساب شما توسط مدیریت افزایش یابد 👇🏻
+
+$cardinfo",
+'reply_to_message_id'=>$message_id,
+'reply_markup'=>$back
+            ]);
+}
+//========================== // key // ==============================
+elseif($text == '👤 حساب کاربری'){
+$allbuy = mysqli_num_rows(mysqli_query($connect,"select `id` from `buy` WHERE `id` = '$from_id'"));
+$orderseen = mysqli_num_rows(mysqli_query($connect,"select `id` from `orderseen` WHERE `id` = '$from_id'"));
+$orderlike = mysqli_num_rows(mysqli_query($connect,"select `id` from `orderlike` WHERE `id` = '$from_id'"));
+$orderchannel = mysqli_num_rows(mysqli_query($connect,"select `id` from `channel` WHERE `id` = '$from_id'"));
+$bazdid = $_seen * 1000;
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"👤 حساب کاربری شما در ربات $botname :
+
+🆔 شناسه : $from_id
+🗣 نام : $first_name
+
+💰 موجودی حساب شما : {$user['coin']} تومان
+👥 تعداد زیر مجموعه ها : {$user['member']} نفر
+
+👁 تعداد سفارشات بازدید : $orderseen
+👍🏻 تعداد سفارشات لایک : $orderlike
+🎯 تعداد کانال های بازدید خودکار : $orderchannel
+🛍 تعداد خرید ها : $allbuy 
+
+⬆️ با دعوت دوستان خود به ربات با لینک اختصاصی خود میتوانید به ازای هر نفر $_member تومان موجودی دریافت کنید
+ℹ️ هزینه هر 1000 بازدید برابر با $bazdid تومان است ، هزینه هر عدد لایک (رأی) برابر با $_like تومان است",
+'reply_to_message_id'=>$message_id,
+            ]);					
+}	
+elseif($text == '☎️ پشتیبانی'){
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"👮🏻 همکاران ما در خدمت شما هستن
+
+📨 جهت ارتباط به صورت مستقیم 👈🏻 $usernamesup	
+⚖️ کاربر گرامی، چنانچه شما از ربات $botname استفاده نمایید به منزله قبول قوانین است
+ 
+• سعی بخش پشتیبانی بر این است که تمامی پیام های دریافتی در کمتر از ۱۲ ساعت پاسخ داده شوند، بنابراین تا زمان دریافت پاسخ صبور باشید
+
+• لطفا پیام، سوال، پیشنهاد و یا انتقاد خود را در قالب یک پیام واحد به طور کامل ارسال کنید 👇🏻",
+'reply_to_message_id'=>$message_id,
+     'reply_markup'=>$back
+            ]);
+$connect->query("UPDATE `user` SET `step` = 'sup' WHERE `id` = '$from_id' LIMIT 1");	
+}		
+elseif($text == '↗️ انتقال'){
+if($user['coin'] > 100){
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>'⤴️ برای انتقال موجودی ابتدا شناسه فرد را وارد کنید 👇🏻
+🆔 شناسه کاربری هر فرد در بخش حساب کاربری وی مشخص هست',
+'reply_to_message_id'=>$message_id,
+'reply_markup'=>$back,
+            ]);
+$connect->query("UPDATE `user` SET `step` = 'sendid' WHERE `id` = '$from_id' LIMIT 1");		
+}else
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>'❗️ موجودی حساب شما کافی نیست , برای انتقال باید حداقل 100 تومان موجودی داشته باشید .',
+    'reply_to_message_id'=>$message_id,
+            ]);
+}
+elseif($text == '🛒 تراکنش ها'){
+$order = mysqli_query($connect,"SELECT * FROM `buy` WHERE `id` = '$from_id' ORDER BY `key` DESC LIMIT 10");
+if(mysqli_num_rows($order) > 0){
+while($row = mysqli_fetch_assoc($order))
+$result = $result."🆔 شناسه خرید : {$row['key']}\n💳 مبلغ : {$row['amount']} تومان\n📅 زمان : {$row['time']}\n━ ━ ━\n";
+	bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"🛍 لیست ده خرید اخیر شما , این لیست تنها جهت اطلاع شماست و کاردبرد دیگری ندارد
+	
+$result",
+    'reply_to_message_id'=>$message_id,
+     ]);
+}else
+ 	bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>'❌ شما تاکنون خریدی در ربات انجام نداده اید
+👇🏻 برای شروع کافیست از دکمه "➕ افزایش موجودی" استفاده نمایید و مراحل را ادامه دهید .',
+    'reply_to_message_id'=>$message_id,
+     ]);
+}
+//===========================// data //===========================
+elseif($data == 'join'){
+if(bot('getChatMember',['chat_id'=>"@$channel",'user_id'=>$fromid])->result->status != 'left'){
+	bot('sendmessage',[
+	'chat_id'=>$chatid,
+	'text'=>"☑️ عضویت شما در کانال تایید شد
+$start",
+'reply_to_message_id'=>$messageid,
+     'reply_markup'=>$home
+    		]);
+}else{
+       bot('answercallbackquery', [
+            'callback_query_id' =>$callback_query_id,
+            'text' => "❌ هنوز داخل کانال « @$channel » عضو نیستی",
+            'show_alert' =>true
+        ]);
+}
+}	
+elseif($data == 'badbutton'){
+      bot('answercallbackquery', [
+            'callback_query_id' =>$callback_query_id,
+            'text' => '❗️ خطا ، این دکمه برای انجام سفارش لایک قابل انتخاب نیست',
+            'show_alert' =>true
+        ]);
+}
+//===========================// step //===========================
+elseif ($user['step'] == 'seenamount') {
+$max = floor($user['coin'] / $_seen);
+if(is_numeric($text) and $text >= 10 and $text <= $maxorder){
+if($user['coin'] >= $text * $_seen){	
+  $limit = ($text > $maxorder)?'💡 تمامی سفارشها تا سقف $maxorder بازدید با توجه به سرعت انتخابی شما تکمیل خواهند شد و پس از آن بدون در نظر گرفتن سرعت تکمیل میشوند .':null;  
+  bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"⏱ سرعت انجام سفارش را لطفا تنظیم نمایید 👇🏻
+❗️ جهت تغییر سرعت و زمان شروع سفارش از دکمه تنظیم سرعت میتوانید استفاده نمایید .
+
+• سریع : هر 5 دقیقه 1000 بازدید
+• متوسط : هر 5 دقیقه 500  بازدید
+• آهسته : هر 5 دقیقه 100 بازدید
+
+$limit",
+    'reply_to_message_id'=>$message_id,
+     'reply_markup'=>$speed
+            ]);	
+$connect->query("UPDATE `user` SET `step` = 'seenspeed' , `data` = '$text' WHERE `id` = '$from_id' LIMIT 1");		
+}else
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"❗️ خطا ، میزان بازدید وارد شده از موجودی شما بیشتر است
+
+👇🏻 تعداد بازدید دلخواه را به صورت عدد بین 10 الی $maxorder وارد نمایید
+👁 موجودی حساب شما {$user['coin']} تومان هست و میتوانید حداکثر $max بازدید را سفارش دهید .",
+'reply_to_message_id'=>$message_id,
+     'reply_markup'=>$back
+            ]);				
+}else
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"❗️ خطا ، پیام شما دارای عدد ورودی نادرست است
+
+👇🏻 تعداد بازدید دلخواه را به صورت عدد بین 10 الی $maxorder وارد نمایید
+👁 موجودی حساب شما {$user['coin']} تومان هست و میتوانید حداکثر $max بازدید را سفارش دهید .",
+'reply_to_message_id'=>$message_id,
+     'reply_markup'=>$back
+            ]);
+}
+elseif ($user['step'] == 'seenspeed') {
+$speedpanel = ['حداکثر سرعت','تنظیم سرعت','سریع','متوسط','آهسته'];
+if(in_array($text , $speedpanel)){
+if($text == 'تنظیم سرعت'){
+  bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>'⏱ افزایش بازدید بعد از چند دقیقه شروع شود
+❗️ مقدار مجاز را به صورت عدد بین  1 الی 1440 دقیقه وارد کنید 👇🏻',
+    'reply_to_message_id'=>$message_id,
+     'reply_markup'=>$back
+            ]);	
+$connect->query("UPDATE `user` SET `step` = 'configspeed'  WHERE `id` = '$from_id' LIMIT 1");		
+}else{
+  bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"⬅️ پست مورد نظر را از کانال جهت افزایش بازدید , به ربات فوروارد نمایید
+	
+⚡️ سرعت تکمیل : $text
+⏱ زمان شروع سفارش : فوری
+👁‍🗨 تعداد بازدید درخواستی : {$user['data']}",
+    'reply_to_message_id'=>$message_id,
+    'reply_markup'=>$back
+	]);		
+$keys = [$speedpanel[0]=>'0^0^0',$speedpanel[2]=>'0^5^1000',$speedpanel[3]=>'0^5^500',$speedpanel[4]=>'0^5^100'];
+$connect->query("UPDATE `user` SET `step` = 'seenpost' , `data` = CONCAT(`data`,'^{$keys[$text]}') WHERE `id` = '$from_id' LIMIT 1");	
+}
+}else
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>'❗️ خطا ، درخواست شما دارای ورودی نادرست است
+⏱ لطفا سرعت تکمیل سفارش خود را با استفاده از دکمه های زیر انتخاب نمایید 👇🏻',
+    'reply_to_message_id'=>$message_id,
+    'reply_markup'=>$speed
+            ]);				
+}
+elseif ($user['step'] == 'configspeed') {
+if(is_numeric($text) and $text >= 1 and $text <= 1440){
+  bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>'⏱ ارسال بازدید هر چند دقیقه یک بار انجام شود
+❗️ مقدار مجاز را به صورت عدد بین  5 الی 1440 دقیقه وارد کنید 👇🏻',
+    'reply_to_message_id'=>$message_id,
+     'reply_markup'=>$back
+            ]);	
+$connect->query("UPDATE `user` SET `step` = 'configspeedtime' , `data` = CONCAT(`data`,'^$text')  WHERE `id` = '$from_id' LIMIT 1");		
+}else
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>'❗️ خطا ، درخواست شما دارای ورودی نادرست است
+
+⏱ افزایش بازدید بعد از چند دقیقه شروع شود
+👇🏻 مقدار مجاز را به صورت عدد بین  1 الی 1440 دقیقه وارد کنید',
+    'reply_to_message_id'=>$message_id,
+    'reply_markup'=>$back
+            ]);				
+}
+elseif ($user['step'] == 'configspeedtime') {
+if(is_numeric($text) and $text >= 5 and $text <= 1440){
+  $explode = explode('^',$user['data']);
+  bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"⏱ چه مقدار بازدید در هر $text دقیقه ارسال شود
+❗️ مقدار مجاز را به صورت عدد بین  10 الی $explode[0] بازدید وارد کنید 👇🏻",
+    'reply_to_message_id'=>$message_id,
+     'reply_markup'=>$back
+            ]);	
+$connect->query("UPDATE `user` SET `step` = 'configspeedseen' , `data` = CONCAT(`data`,'^$text') WHERE `id` = '$from_id' LIMIT 1");		
+}else
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>'❗️ خطا ، درخواست شما دارای ورودی نادرست است
+
+⏱ ارسال بازدید هر چند دقیقه یک بار انجام شود
+👇🏻 مقدار مجاز را به صورت عدد بین  5 الی 1440 دقیقه وارد کنید',
+    'reply_to_message_id'=>$message_id,
+    'reply_markup'=>$back
+            ]);				
+}
+elseif ($user['step'] == 'configspeedseen') {
+$explode = explode('^',$user['data']);
+if(is_numeric($text) and $text >= 10 and $text <= $explode[0]){
+  bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"⬅️ پست مورد نظر را از کانال جهت افزایش بازدید , به ربات فوروارد نمایید(درصورت نیاز میتوانید لینک پست موردنظر را ارسال کنید)
+	
+⚡️ سرعت تکمیل : هر $explode[2] دقیقه $text بازدید
+⏱ زمان شروع سفارش : بعد از $explode[1] دقیقه
+👁‍🗨 تعداد بازدید درخواستی : $explode[0]",
+    'reply_to_message_id'=>$message_id,
+     'reply_markup'=>$back
+            ]);	
+$connect->query("UPDATE `user` SET `step` = 'seenpost' , `data` = CONCAT(`data`,'^$text') WHERE `id` = '$from_id' LIMIT 1");		
+}else
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"❗️ خطا ، درخواست شما دارای ورودی نادرست است
+
+⏱ چه مقدار بازدید در هر $explode[2] دقیقه ارسال شود
+👇🏻 مقدار مجاز را به صورت عدد بین  10 الی $explode[0] بازدید وارد کنید",
+    'reply_to_message_id'=>$message_id,
+    'reply_markup'=>$back
+            ]);				
+}
+//===========================
+elseif ($user['step'] == 'seentamount') {
+$max = floor($user['coin'] / $_seen);
+if(is_numeric($text) and $text >= 10 and $text <= $maxorder){
+if($user['coin'] >= $text * $_seen){	
+  bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"⏱ سرعت انجام سفارش را لطفا تنظیم نمایید 👇🏻
+❗️ جهت تغییر سرعت و زمان شروع سفارش از دکمه تنظیم سرعت میتوانید استفاده نمایید .
+
+• سریع : هر 5 دقیقه 1000 بازدید
+• متوسط : هر 5 دقیقه 500  بازدید
+• آهسته : هر 5 دقیقه 100 بازدید",
+    'reply_to_message_id'=>$message_id,
+     'reply_markup'=>$speed
+            ]);	
+$connect->query("UPDATE `user` SET `step` = 'seentspeed' , `data` = '$text' WHERE `id` = '$from_id' LIMIT 1");		
+}else
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"❗️ خطا ، میزان بازدید وارد شده از موجودی شما بیشتر است
+
+👇🏻 تعداد بازدید دلخواه را به صورت عدد بین 10 الی $maxorder وارد نمایید
+👁 موجودی حساب شما {$user['coin']} تومان هست و میتوانید حداکثر $max بازدید را سفارش دهید",
+'reply_to_message_id'=>$message_id,
+     'reply_markup'=>$back
+            ]);				
+}else
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"❗️ خطا ، پیام شما دارای عدد ورودی نادرست است
+
+👇🏻 تعداد بازدید دلخواه را به صورت عدد بین 10 الی $maxorder وارد نمایید
+👁 موجودی حساب شما {$user['coin']} تومان هست و میتوانید حداکثر $max بازدید را سفارش دهید",
+'reply_to_message_id'=>$message_id,
+     'reply_markup'=>$back
+            ]);
+}
+elseif ($user['step'] == 'seentspeed') {
+$speedpanel = ['حداکثر سرعت','تنظیم سرعت','سریع','متوسط','آهسته'];
+if(in_array($text , $speedpanel)){
+if($text == 'تنظیم سرعت'){
+  bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>'⏱ افزایش بازدید بعد از چند دقیقه شروع شود
+❗️ مقدار مجاز را به صورت عدد بین  1 الی 1440 دقیقه وارد کنید 👇🏻',
+    'reply_to_message_id'=>$message_id,
+     'reply_markup'=>$back
+            ]);	
+$connect->query("UPDATE `user` SET `step` = 'configspeed'  WHERE `id` = '$from_id' LIMIT 1");		
+}else{
+  bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"⬅️ پست مورد نظر را از کانال جهت افزایش بازدید , به ربات فوروارد نمایید (درصورت نیاز میتوانید لینک پست موردنظر را ارسال کنید)
+	
+⚡️ سرعت تکمیل : $text
+⏱ زمان شروع سفارش : فوری
+👁‍🗨 تعداد بازدید درخواستی : {$user['data']}",
+    'reply_to_message_id'=>$message_id,
+    'reply_markup'=>$back
+	]);		
+$keys = [$speedpanel[0]=>'0^0^0',$speedpanel[2]=>'0^5^1000',$speedpanel[3]=>'0^5^500',$speedpanel[4]=>'0^5^100'];
+$connect->query("UPDATE `user` SET `step` = 'seentpost' , `data` = CONCAT(`data`,'^{$keys[$text]}') WHERE `id` = '$from_id' LIMIT 1");	
+}
+}else
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>'❗️ خطا ، درخواست شما دارای ورودی نادرست است
+⏱ لطفا سرعت تکمیل سفارش خود را با استفاده از دکمه های زیر انتخاب نمایید 👇🏻',
+    'reply_to_message_id'=>$message_id,
+    'reply_markup'=>$speed
+            ]);				
+}
+elseif ($user['step'] == 'configtspeed') {
+if(is_numeric($text) and $text >= 1 and $text <= 1440){
+  bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>'⏱ ارسال بازدید هر چند دقیقه یک بار انجام شود
+❗️ مقدار مجاز را به صورت عدد بین  5 الی 1440 دقیقه وارد کنید 👇🏻',
+    'reply_to_message_id'=>$message_id,
+     'reply_markup'=>$back
+            ]);	
+$connect->query("UPDATE `user` SET `step` = 'configtspeedtime' , `data` = CONCAT(`data`,'^$text')  WHERE `id` = '$from_id' LIMIT 1");		
+}else
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>'❗️ خطا ، درخواست شما دارای ورودی نادرست است
+
+⏱ افزایش بازدید بعد از چند دقیقه شروع شود
+👇🏻 مقدار مجاز را به صورت عدد بین  1 الی 1440 دقیقه وارد کنید',
+    'reply_to_message_id'=>$message_id,
+    'reply_markup'=>$back
+            ]);				
+}
+elseif ($user['step'] == 'configtspeedtime') {
+if(is_numeric($text) and $text >= 5 and $text <= 1440){
+  $explode = explode('^',$user['data']);
+  bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"⏱ چه مقدار بازدید در هر $text دقیقه ارسال شود
+❗️ مقدار مجاز را به صورت عدد بین  10 الی $explode[0] بازدید وارد کنید 👇🏻",
+    'reply_to_message_id'=>$message_id,
+     'reply_markup'=>$back
+            ]);	
+$connect->query("UPDATE `user` SET `step` = 'configtspeedseen' , `data` = CONCAT(`data`,'^$text') WHERE `id` = '$from_id' LIMIT 1");		
+}else
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>'❗️ خطا ، درخواست شما دارای ورودی نادرست است
+
+⏱ ارسال بازدید هر چند دقیقه یک بار انجام شود
+👇🏻 مقدار مجاز را به صورت عدد بین  5 الی 1440 دقیقه وارد کنید',
+    'reply_to_message_id'=>$message_id,
+    'reply_markup'=>$back
+            ]);				
+}
+elseif ($user['step'] == 'configtspeedseen') {
+$explode = explode('^',$user['data']);
+if(is_numeric($text) and $text >= 10 and $text <= $explode[0]){
+  bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"⬅️ پست مورد نظر را از کانال جهت افزایش بازدید , به ربات فوروارد نمایید(درصورت نیاز میتوانید لینک پست موردنظر را ارسال کنید)
+	
+⚡️ سرعت تکمیل : هر $explode[2] دقیقه $text بازدید
+⏱ زمان شروع سفارش : بعد از $explode[1] دقیقه
+👁‍🗨 تعداد بازدید درخواستی : $explode[0]",
+    'reply_to_message_id'=>$message_id,
+     'reply_markup'=>$back
+            ]);	
+$connect->query("UPDATE `user` SET `step` = 'seentpost' , `data` = CONCAT(`data`,'^$text') WHERE `id` = '$from_id' LIMIT 1");		
+}else
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"❗️ خطا ، درخواست شما دارای ورودی نادرست است
+
+⏱ چه مقدار بازدید در هر $explode[2] دقیقه ارسال شود
+👇🏻 مقدار مجاز را به صورت عدد بین  10 الی $explode[0] بازدید وارد کنید",
+    'reply_to_message_id'=>$message_id,
+    'reply_markup'=>$back
+            ]);				
+}
+elseif ($user['step'] == 'likeamount') {
+$max = floor($user['coin'] / $_like);
+if(is_numeric($text) and $text >= 1 and $text <= $maxorder){
+if($user['coin'] >= $text * $_like){	
+  bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>'⏱ سرعت انجام سفارش را لطفا تنظیم نمایید 👇🏻',
+    'reply_to_message_id'=>$message_id,
+     'reply_markup'=>$speedlike
+            ]);	
+$connect->query("UPDATE `user` SET `step` = 'likespeed' , `data` = '$text' WHERE `id` = '$from_id' LIMIT 1");		
+}else
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"❗️ خطا ، میزان لایک وارد شده از موجودی شما بیشتر است
+
+👇🏻 تعداد لایک (رأی) مورد نظر را به صورت عددی بین 1 الی $ma وارد کنید
+👍🏻 موجودی حساب شما {$user['coin']} تومان هست و میتوانید حداکثر $max لایک را سفارش دهید",
+'reply_to_message_id'=>$message_id,
+     'reply_markup'=>$back
+            ]);				
+}else
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"❗️ خطا ، پیام شما دارای عدد ورودی نادرست است
+
+👇🏻 تعداد لایک (رأی) مورد نظر را به صورت عددی بین 1 الی $maxorder وارد کنید
+👍🏻 موجودی حساب شما {$user['coin']} تومان هست و میتوانید حداکثر $max لایک را سفارش دهید",
+'reply_to_message_id'=>$message_id,
+     'reply_markup'=>$back
+            ]);
+}
+elseif ($user['step'] == 'likespeed') {
+$speedpanel = ['حداکثر سرعت','هر 2 دقیقه 1 لایک','هر 5 دقیقه 1 لایک','هر 15 دقیقه 1 لایک','هر 30 دقیقه 1 لایک'];
+if(in_array($text , $speedpanel)){
+  $amount = $user['data'] * $_like;
+  bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"⬅️ پست (نظر سنجی) مورد نظر را جهت افزایش لایک (رأی) از یک کانال عمومی به ربات فوروارد کنید
+	
+⚡️ سرعت تکمیل : $text
+💰 هزینه سفارش : $amount تومان
+👍🏻 تعداد درخواست لایک : {$user['data']}",
+    'reply_to_message_id'=>$message_id,
+    'reply_markup'=>$back
+	]);		
+$keys = [$speedpanel[0]=>'1',$speedpanel[1]=>'2',$speedpanel[2]=>'5',$speedpanel[3]=>'15',$speedpanel[4]=>'30'];
+$connect->query("UPDATE `user` SET `step` = 'likebutton' , `data` = CONCAT(`data`,'^{$keys[$text]}') WHERE `id` = '$from_id' LIMIT 1");	
+}else
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>'❗️ خطا ، درخواست شما دارای ورودی نادرست است
+⏱ لطفا سرعت تکمیل سفارش خود را با استفاده از دکمه های زیر انتخاب نمایید 👇🏻',
+    'reply_to_message_id'=>$message_id,
+    'reply_markup'=>$speedlike
+            ]);				
+}
+elseif ($user['step'] == 'likebutton') {
+if($message->poll == true) { 
+if($message->poll->is_closed == false) { $i = 0;
+  foreach ($message->poll->options as $k => $v) {
+    $substrtext = (mb_strlen($v->text) <= 27)?$v->text:mb_substr($v->text,0,27).'...';	  
+    $key[] = [['text'=>$v->text,'callback_data'=>"bu_{$i}_0_{$substrtext}"]];
+	$i ++;
+  }
+    bot('sendmessage',[
+	'chat_id'=>$chat_id,
+    'text'=>'👇🏻 لطفا گزینه مورد نظر را که مایلید برای آن لایک سفارش دهید را انتخاب کنید
+• انجام لایک و رأی برای پست هایی که نیاز به جوین شدن در کانال داشته باشد امکان پذیر نیست .',
+    'reply_to_message_id'=>$message_id,
+	'reply_markup'=>json_encode([
+    'inline_keyboard'=>$key
+        ])
+            ]);
+  $id = bot('ForwardMessage',[
+  'chat_id'=>"@$channelorder",   
+  'from_chat_id'=>$from_id,
+  'message_id'=>$message_id,
+  ])->result->message_id;
+  $connect->query("UPDATE `user` SET `data` = CONCAT(`data`,'^$channelorder^$id') WHERE `id` = '$from_id' LIMIT 1");
+} else
+	  bot('sendmessage',[
+	'chat_id'=>$chat_id,
+    'text'=>'️❗️ خطا ، نظر سنجی ارسال شده به اتمام رسیده است
+⬅️ پست (نظر سنجی) مورد نظر را جهت افزایش لایک (رأی) از یک کانال عمومی به ربات فوروارد کنید',
+    'reply_to_message_id'=>$message_id,
+	'reply_markup'=>$back
+            ]);
+} else {
+  $forward_from_chat_username = $message->forward_from_chat->username;
+  if($forward_from_chat_username == true){
+  $key = file_get_contents("$webapi/button.php?channel=@$forward_from_chat_username&post={$message->forward_from_message_id}");
+  if($key == '0')
+  bot('sendmessage',[
+	'chat_id'=>$chat_id,
+    'text'=>'️❗️ خطا ، پست ارسال شده فاقد دکمه برای انجام سفارش است
+⬅️ پست (نظر سنجی) مورد نظر را جهت افزایش لایک (رأی) از یک کانال عمومی به ربات فوروارد کنید',
+    'reply_to_message_id'=>$message_id,
+	'reply_markup'=>$back
+            ]);
+else {
+	bot('sendmessage',[
+	'chat_id'=>$chat_id,
+    'text'=>'👇🏻 لطفا گزینه مورد نظر را که مایلید برای آن لایک سفارش دهید را انتخاب کنید
+• انجام لایک و رأی برای پست هایی که نیاز به جوین شدن در کانال داشته باشد امکان پذیر نیست .',
+    'reply_to_message_id'=>$message_id,
+	'reply_markup'=>$key
+            ]);
+	$connect->query("UPDATE `user` SET `data` = CONCAT(`data`,'^$forward_from_chat_username^{$message->forward_from_message_id}') WHERE `id` = '$from_id' LIMIT 1");
+}			
+}else
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>'❗️ پست ارسال شده معتبر نیست
+⬅️ پست (نظر سنجی) مورد نظر را جهت افزایش لایک (رأی) از یک کانال عمومی به ربات فوروارد کنید',
+    'reply_to_message_id'=>$message_id,
+    'reply_markup'=>$back
+            ]);				
+}
+}
+elseif ($user['step'] == 'setchannel') {
+   $forward_from_chat_id = $message->forward_from_chat->id;
+if($forward_from_chat_id == true){
+$getChatMember = bot('getChatMember',['chat_id'=>$forward_from_chat_id,'user_id'=>$botid])->result;
+$getchat = bot('getchat',['chat_id'=>$forward_from_chat_id])->result;
+if($getchat->type == 'channel' and $getChatMember->status != 'left'){
+if(mysqli_num_rows(mysqli_query($connect,"SELECT * FROM `channel` WHERE `channel` = '$forward_from_chat_id' limit 1")) <= 0)	{
+$max = floor($user['coin'] / $_seen);
+$bazdid = $_seen * 1000;
+  bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"✅ کانال شما با موفقیت ثبت شد .
+
+👁‍ تعداد بازدید دلخواه برای پستهای جدید را به صورت عدد بین 10 الی $maxorder وارد نمایید 👇🏻
+
+❗️ موجودی حساب شما {$user['coin']} تومان هست و میتوانید حداکثر $max بازدید را سفارش دهید .
+• هزینه هر 1000 بازدید برابر با $bazdid تومان است",
+'reply_to_message_id'=>$message_id,
+     'reply_markup'=>$back
+            ]);	
+$connect->query("UPDATE `user` SET `step` = 'amountchannel' , `data` = '$forward_from_chat_id' WHERE `id` = '$from_id' LIMIT 1");		
+}else
+	bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"ک❗️ خطا ، قبلا بازدید خودکار برای این کانال را ثبت کردید
+👈🏻 برای حذف کانال کافیست از دکمه '📢 کانال های ثبت شده' استفاده نمایید",
+'reply_to_message_id'=>$message_id,
+     'reply_markup'=>json_encode([
+        'keyboard'=>[
+		[['text'=>'📢 کانال های ثبت شده']],
+		[['text'=>'🔙 بازگشت']],
+		],
+        'resize_keyboard'=>true,
+       		])
+            ]);	
+}else
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"❗️ خطا ، ربات در کانال شما ادمین نیست
+
+✅ برای شروع ثبت بازدید خودکار , لطفا ربات @$usernamebot را در کانالتان ادمین کنید سپس یک پست از کانال را به ربات فوروارد نمایید
+<a href='$web/help.php'>👮🏻 آموزش نحوه ادمین کردن ربات</a>",
+'parse_mode'=>'HTML',
+'reply_to_message_id'=>$message_id,
+     'reply_markup'=>$back
+            ]);		
+}else
+	bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>'❗️ خطا ، پست ارسال شده متعبر نیست
+👇🏻 پستی که ارسال کرده اید، فوروارد نشده بود، برای ثبت بازدید خودکار حتما باید یک پست از کانال را فوروارد کنید .',
+'reply_to_message_id'=>$message_id,
+     'reply_markup'=>$back
+            ]);		
+}
+elseif ($user['step'] == 'amountchannel') {
+$max = floor($user['coin'] / $_seen);
+if(is_numeric($text) and $text >= 10 and $text <= $maxorder){
+if($user['coin'] >= $text * $_seen){	
+  $limit = ($text > $maxorder)?'💡 تمامی سفارشها تا سقف $maxorder بازدید با توجه به سرعت انتخابی شما تکمیل خواهند شد و پس از آن بدون در نظر گرفتن سرعت تکمیل میشوند .':null;  
+  bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"⏱ سرعت انجام سفارش را لطفا تنظیم نمایید 👇🏻
+❗️ جهت تغییر سرعت و زمان شروع سفارش از دکمه تنظیم سرعت میتوانید استفاده نمایید .
+
+• سریع : هر 5 دقیقه 1000 بازدید
+• متوسط : هر 5 دقیقه 500  بازدید
+• آهسته : هر 5 دقیقه 100 بازدید
+
+$limit",
+    'reply_to_message_id'=>$message_id,
+     'reply_markup'=>$speed
+            ]);	
+$connect->query("UPDATE `user` SET `step` = 'seenspeedch' , `data` = CONCAT(`data`,'^$text') WHERE `id` = '$from_id' LIMIT 1");	
+}else
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"❗️ خطا ، میزان بازدید وارد شده از موجودی شما بیشتر است
+
+👇🏻 تعداد بازدید دلخواه را به صورت عدد بین 10 الی $maxorder وارد نمایید
+👁 موجودی حساب شما {$user['coin']} تومان هست و میتوانید حداکثر $max بازدید را سفارش دهید .",
+'reply_to_message_id'=>$message_id,
+     'reply_markup'=>$back
+            ]);				
+}else
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"❗️ خطا ، پیام شما دارای عدد ورودی نادرست است
+
+👇🏻 تعداد بازدید دلخواه را به صورت عدد بین 10 الی $maxorder وارد نمایید
+👁 موجودی حساب شما {$user['coin']} تومان هست و میتوانید حداکثر $max بازدید را سفارش دهید .",
+'reply_to_message_id'=>$message_id,
+     'reply_markup'=>$back
+            ]);
+}
+elseif ($user['step'] == 'seenspeedch') {
+$speedpanel = ['حداکثر سرعت','تنظیم سرعت','سریع','متوسط','آهسته'];
+if(in_array($text , $speedpanel)){
+if($text == 'تنظیم سرعت'){
+  bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>'⏱ افزایش بازدید بعد از چند دقیقه شروع شود
+❗️ مقدار مجاز را به صورت عدد بین  1 الی 1440 دقیقه وارد کنید 👇🏻',
+    'reply_to_message_id'=>$message_id,
+     'reply_markup'=>$back
+            ]);	
+$connect->query("UPDATE `user` SET `step` = 'configspeedch'  WHERE `id` = '$from_id' LIMIT 1");		
+}else{
+  $explode = explode('^',$user['data']);
+  $title = bot('getchat',['chat_id'=>$explode[0]])->result->title;
+  $amount = $explode[1] * $_seen;
+  bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"☑️ سفارش بازدید خودکار برای کانال $title ثبت شد .
+
+⚡️ سرعت انجام سفارش : فوری و $text
+💰 هزینه سفارش هر پست : $amount تومان
+👁‍🗨 تعداد بازدید درخواستی برای هر پست : $explode[1]
+❌ برای لغو سفارش /del_".abs($explode[0])."",
+    'reply_to_message_id'=>$message_id,
+    'reply_markup'=>$home
+	]);		
+$keys = [$speedpanel[0]=>'0^0^0',$speedpanel[2]=>'0^5^1000',$speedpanel[3]=>'0^5^500',$speedpanel[4]=>'0^5^100'];
+$connect->query("INSERT INTO `channel` (`channel` , `id` , `speed` , `view`) VALUES ('$explode[0]' , '$from_id' , '{$keys[$text]}' , '$explode[1]')");		
+$connect->query("UPDATE `user` SET `step` = 'none'  WHERE `id` = '$from_id' LIMIT 1");	
+}
+}else
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>'❗️ خطا ، درخواست شما دارای ورودی نادرست است
+⏱ لطفا سرعت تکمیل سفارش خود را با استفاده از دکمه های زیر انتخاب نمایید 👇🏻',
+    'reply_to_message_id'=>$message_id,
+    'reply_markup'=>$speed
+            ]);				
+}
+elseif ($user['step'] == 'configspeedch') {
+if(is_numeric($text) and $text >= 1 and $text <= 1440){
+  bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>'⏱ ارسال بازدید هر چند دقیقه یک بار انجام شود
+❗️ مقدار مجاز را به صورت عدد بین  5 الی 1440 دقیقه وارد کنید 👇🏻',
+    'reply_to_message_id'=>$message_id,
+     'reply_markup'=>$back
+            ]);	
+$connect->query("UPDATE `user` SET `step` = 'configspeedtimech' , `data` = CONCAT(`data`,'^$text')  WHERE `id` = '$from_id' LIMIT 1");		
+}else
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>'❗️ خطا ، درخواست شما دارای ورودی نادرست است
+
+⏱ افزایش بازدید بعد از چند دقیقه شروع شود
+👇🏻 مقدار مجاز را به صورت عدد بین  1 الی 1440 دقیقه وارد کنید',
+    'reply_to_message_id'=>$message_id,
+    'reply_markup'=>$back
+            ]);				
+}
+elseif ($user['step'] == 'configspeedtimech') {
+if(is_numeric($text) and $text >= 5 and $text <= 1440){
+  $explode = explode('^',$user['data']);
+  bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"⏱ چه مقدار بازدید در هر $text دقیقه ارسال شود
+❗️ مقدار مجاز را به صورت عدد بین  10 الی $explode[1] بازدید وارد کنید 👇🏻",
+    'reply_to_message_id'=>$message_id,
+     'reply_markup'=>$back
+            ]);	
+$connect->query("UPDATE `user` SET `step` = 'configspeedseench' , `data` = CONCAT(`data`,'^$text') WHERE `id` = '$from_id' LIMIT 1");		
+}else
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>'❗️ خطا ، درخواست شما دارای ورودی نادرست است
+
+⏱ ارسال بازدید هر چند دقیقه یک بار انجام شود
+👇🏻 مقدار مجاز را به صورت عدد بین  5 الی 1440 دقیقه وارد کنید',
+    'reply_to_message_id'=>$message_id,
+    'reply_markup'=>$back
+            ]);				
+}
+elseif ($user['step'] == 'configspeedseench') {
+$explode = explode('^',$user['data']);
+if(is_numeric($text) and $text >= 10 and $text <= $explode[1]){
+  $start = ($explode[2] == 0)?'فوری':"بعد از $explode[2] دقیقه";
+  $speed = ($explode[3] == 0)?'حداکثر سرعت':"هر $explode[3] دقیقه $text بازدید";
+  $title = bot('getchat',['chat_id'=>$explode[0]])->result->title;
+  $amount = $explode[1] * $_seen;
+  bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"☑️ سفارش بازدید خودکار برای کانال $title ثبت شد .
+
+⚡️ سرعت انجام سفارش : $start و $speed
+💰 هزینه سفارش هر پست : $amount تومان
+👁‍🗨 تعداد بازدید درخواستی برای هر پست : $explode[1]
+❌ برای لغو سفارش /del_".abs($explode[0])."",
+    'reply_to_message_id'=>$message_id,
+    'reply_markup'=>$home
+	]);		
+$connect->query("INSERT INTO `channel` (`channel` , `id` , `speed` , `view`) VALUES ('$explode[0]' , '$from_id' , '$explode[2]^$explode[3]^$text' , '$explode[1]')");		
+$connect->query("UPDATE `user` SET `step` = 'none'  WHERE `id` = '$from_id' LIMIT 1");		
+}else
+bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"❗️ خطا ، درخواست شما دارای ورودی نادرست است
+
+⏱ چه مقدار بازدید در هر $explode[3] دقیقه ارسال شود
+👇🏻 مقدار مجاز را به صورت عدد بین  10 الی $explode[1] بازدید وارد کنید",
+    'reply_to_message_id'=>$message_id,
+    'reply_markup'=>$back
+            ]);				
+}
+elseif($user['step'] == 'pay' && $tc == 'private'){
+if($text >= 1000 and $text <= 200000){
+			bot('sendmessage',[       
+			'chat_id'=>$chat_id,
+			'text'=>'⏳ در حال ساخت فاکتور پرداخت ...',
+			'reply_markup'=>$home
+	        ]);	
+			bot('sendmessage',[       
+			'chat_id'=>$chat_id,
+			'text'=>"✅ فاکتور افزایش موجودی با مبلغ $text تومان با موفقیت برای شما ساخته شد
+   
+☑️ تمامی پرداخت ها به صورت اتوماتیک بوده و پس از تراکنش موفق مبلغ آن به موجودی حساب شما در ربات افزوده خواهد شد .
+
+👇🏻 پرای پرداخت کافیست از دکمه زیر استفاده کنید",
+			'reply_to_message_id'=>$message_id,
+			'reply_markup'=>json_encode([
+    'inline_keyboard'=>[
+	[['text'=>"💳 پرداخت $text تومان",'url'=>"$web/pay/pay.php?amount=$text&id=$from_id"]],
+              ]
+              ])
+	       ]);	
+     $connect->query("UPDATE user SET step = 'none' WHERE id = '$from_id' LIMIT 1");
+}else
+			bot('sendmessage',[       
+			'chat_id'=>$chat_id,
+			'text'=>'❗️ خطا ، پیام شما دارای عدد ورودی نادرست است
+👇🏻 برای افزایش موجودی حساب مبلغ موردنظر خود را به تومان وارد نمایید
+
+💡 توجه کنید که مبلغ را به عدد وارد کنید و حداقل میتوانید 1000 و حداکثر 200000 تومان حساب خود را شارژ کنید',
+			'reply_to_message_id'=>$message_id,
+	              ]);	
+}
+elseif($user['step'] == 'sendid'){
+if(mysqli_fetch_assoc(mysqli_query($connect,"SELECT * FROM `user` WHERE `id` = '$text' LIMIT 1")) == true and $text != $from_id){
+			bot('sendmessage',[       
+			'chat_id'=>$chat_id,
+			'text'=>"👇🏻 مبلغ مورد نظر جهت انتقال را به تومان وارد نمایید
+
+👈🏻 حداقل مبلغ قابل انتقال 100 تومان است
+💰 موجودی حساب شما {$user['coin']} تومان است",
+'reply_to_message_id'=>$message_id,
+'reply_markup'=>$back
+	]);	
+ $connect->query("UPDATE `user` SET `step` = 'sendcoin' , `data` = '$text' WHERE `id` = '$from_id' LIMIT 1");
+}else
+			bot('sendmessage',[       
+			'chat_id'=>$chat_id,
+			'text'=>'❗️ خطا ، کاربر مورد نظر یافت نشد
+			
+⤴️ برای انتقال موجودی ابتدا شناسه فرد را وارد کنید 👇🏻
+🆔 شناسه کاربری هر فرد در بخش حساب کاربری وی مشخص هست',
+'reply_to_message_id'=>$message_id,
+'reply_markup'=>$back
+	]);	
+}
+elseif($user['step'] == 'sup'){
+	    bot('sendmessage',[       
+		'chat_id'=>$chat_id,
+		'text'=>'✅ پیام شما با موفقیت ارسال شد منتظر پاسخ پشتیبانی باشید',
+        'reply_to_message_id'=>$message_id,
+        'reply_markup'=>$back
+	       ]);	
+        bot('ForwardMessage',[
+        'chat_id'=>$admin[0],
+        'from_chat_id'=>$chat_id,
+        'message_id'=>$message_id
+           ]);
+}
+//===========================// panel admin //===========================
+elseif($text == '/panel' and $tc == 'private' and in_array($from_id,$admin)){
+   bot('sendmessage',[
+   'chat_id'=>$chat_id,
+   'text'=>"📍 ادمین عزیز به پنل مدریت ربات خوش امدید",
+   'reply_markup'=>json_encode([
+   'keyboard'=>[
+	   [['text'=>"📍 آمار ربات"],['text'=>"📍 افزایش موجودی"]],
+       [['text'=>"📍 ارسال به کاربران"],['text'=>"📍 فروارد به کاربران"]],
+	   [['text'=>"📍 شارژ پنل"],['text'=>"📍 مسدود کردن"]]
+            ],
+      'resize_keyboard'=>true
+      ])
+    ]);
+}
+elseif($text == 'برگشت 🔙' and $tc == 'private' and in_array($from_id,$admin)){
+    bot('sendmessage',[
+   'chat_id'=>$chat_id,
+   'text'=>"🚦 به منوی مدیریت بازگشتید",
+   'reply_markup'=>json_encode([
+   'keyboard'=>[
+	   [['text'=>"📍 آمار ربات"],['text'=>"📍 افزایش موجودی"]],
+       [['text'=>"📍 ارسال به کاربران"],['text'=>"📍 فروارد به کاربران"]],
+	   [['text'=>"📍 شارژ پنل"],['text'=>"📍 مسدود کردن"]],
+            ],
+      'resize_keyboard'=>true
+      ])
+    ]);
+$connect->query("UPDATE `user` SET `step` = 'none' WHERE `id` = '$from_id' LIMIT 1");		
+}
+elseif($text == '📍 آمار ربات' and $tc == 'private' and in_array($from_id,$admin)){
+$alluser = mysqli_num_rows(mysqli_query($connect,"select `id` from `user`"));
+$allorderseen = mysqli_num_rows(mysqli_query($connect,"select `id` from `orderseen`"));
+$allorderlike = mysqli_num_rows(mysqli_query($connect,"select `id` from `orderlike`"));
+$allorderchannel = mysqli_num_rows(mysqli_query($connect,"select `id` from `channel`"));
+$allbuy = mysqli_num_rows(mysqli_query($connect,"select `id` from `buy`"));
+$allblock = mysqli_num_rows(mysqli_query($connect,"select `id` from `block`"));
+$result = curl("https://starseen.net/web.php?apikey=$apikey&type=amount");
+		bot('sendmessage',[
+		'chat_id'=>$chat_id,
+		'text'=>"🤖 آمار ربات شما
+		
+📍 تعداد کاربران : $alluser
+📍 موجودی پنل : {$result->amount}
+📍 تعداد سفارشات بازدید : $allorderseen
+📍 تعداد سفارشات لایک : $allorderlike
+📍 تعداد کانال های ثبت شده : $allorderchannel
+📍 تعداد خرید ها : $allbuy
+📍 تعداد مسدود ها : $allblock",
+		]);
+		}
+elseif ($text == '📍 ارسال به کاربران' and $tc == 'private' and in_array($from_id,$admin)) {
+         bot('sendmessage',[
+         'chat_id'=>$chat_id,
+         'text'=>"📍 لطفا متن یا رسانه خود را ارسال کنید [میتواند شامل عکس باشد]  همچنین میتوانید رسانه را همراه با کشپن [متن چسپیده به رسانه ارسال کنید]",
+	     'reply_markup'=>json_encode([
+         'keyboard'=>[
+	         [['text'=>"برگشت 🔙"]]
+                ],
+           'resize_keyboard'=>true
+              ])
+          ]);
+$connect->query("UPDATE `user` SET `step` = 'sendtoall' WHERE `id` = '$from_id' LIMIT 1");
+}
+elseif ($text == '📍 فروارد به کاربران' and $tc == 'private' and in_array($from_id,$admin)){
+         bot('sendmessage',[
+         'chat_id'=>$chat_id,
+         'text'=>"📍 لطفا پیام خود را فوروارد کنید [پیام فوروارد شده میتوانید از شخص یا کانال باشد]",
+	     'reply_markup'=>json_encode([
+         'keyboard'=>[
+	         [['text'=>"برگشت 🔙"]]
+                ],
+           'resize_keyboard'=>true
+              ])
+          ]);
+$connect->query("UPDATE `user` SET `step` = 'fortoall' WHERE `id` = '$from_id' LIMIT 1");		
+}
+elseif ($text == '📍 شارژ پنل' and $tc == 'private' and in_array($from_id,$admin)){
+	$result = curl("https://starseen.net/web.php?apikey=$apikey&type=amount");
+         bot('sendmessage',[
+         'chat_id'=>$chat_id,
+         'text'=>"📍 موجودی پنل شما در حال حاظر {$result->amount}
+         } تومان است
+📍 مبلغ مورد نظر را جهت شارژ مجدد وارد کنید",
+	   'reply_markup'=>json_encode([
+       'keyboard'=>[
+	        [['text'=>"برگشت 🔙"]]
+                 ],
+          'resize_keyboard'=>true
+            ])
+          ]);
+$connect->query("UPDATE `user` SET `step` = 'charge' WHERE `id` = '$from_id' LIMIT 1");		
+}
+elseif ($text == '📍 افزایش موجودی' and $tc == 'private' and in_array($from_id,$admin)){
+         bot('sendmessage',[
+         'chat_id'=>$chat_id,
+         'text'=>"📍 لطفا در خط اول ایدی فرد و در خط دوم میزان موجودی را وارد کنید
+📍 اگر میخواهید موجودی فر را کم کنید از علامت - منفی استفاده کنید
+267785153
+20",
+	   'reply_markup'=>json_encode([
+       'keyboard'=>[
+	        [['text'=>"برگشت 🔙"]]
+                 ],
+          'resize_keyboard'=>true
+            ])
+          ]);
+$connect->query("UPDATE `user` SET `step` = 'sendadmin' WHERE `id` = '$from_id' LIMIT 1");		
+}
+elseif ($text == '📍 مسدود کردن' and $tc == 'private' and in_array($from_id,$admin)){
+         bot('sendmessage',[
+         'chat_id'=>$chat_id,
+         'text'=>"📍 لطفا شناسه کاربری فرد را ارسال کنید",
+	   'reply_markup'=>json_encode([
+       'keyboard'=>[
+	        [['text'=>"برگشت 🔙"]]
+                 ],
+          'resize_keyboard'=>true
+            ])
+          ]);
+$connect->query("UPDATE `user` SET `step` = 'block' WHERE `id` = '$from_id' LIMIT 1");		
+}
+//===========================// admin step //===========================
+elseif($user['step'] == 'charge') {	
+ 	bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>"✅ فاکتور افزایش موجودی شما : https://AvidSeen.com/web/pay.php?id=637827997&amount=$text",
+    		]);
+$connect->query("UPDATE `user` SET `step` = 'none' WHERE `id` = '$from_id' LIMIT 1");
+}
+elseif($user['step'] == 'block' && $tc == 'private') {
+			bot('sendmessage',[       
+			'chat_id'=>$chat_id,
+			'text'=>"✅ فرد با موفقیت مسدود شد",
+	         ]);	
+$connect->query("INSERT INTO `block` (`id`) VALUES ('$text')");
+$connect->query("UPDATE `user` SET `step` = 'none' WHERE `id` = '$from_id' LIMIT 1");
+}
+elseif($user['step'] == 'sendadmin') {
+$all = explode("\n", $text);	
+			bot('sendmessage',[       
+			'chat_id'=>$chat_id,
+			'text'=>"انتقال موجودی با موفقیت انجام شد ✅",
+	         ]);
+$user = mysqli_fetch_assoc(mysqli_query($connect,"SELECT * FROM `user` WHERE `id` = '$all[0]' LIMIT 1"));			 
+$coin = $user['coin'] + $all[1] ;
+			bot('sendmessage',[       
+			'chat_id'=>$all[0],
+			'text'=>"✅ $all[1] تومان موجودی از طرف مدیریت ربات برای شما انتقال داده شد .
+💰 موجودی جدید شما : $coin تومان",
+	]);	
+$connect->query("UPDATE `user` SET `coin` = '$coin' WHERE `id` = '$all[0]' LIMIT 1");
+}
+elseif ($user['step'] == 'sendtoall') {
+$photo = $message->photo[count($message->photo)-1]->file_id;
+$caption = $update->message->caption;
+         bot('sendmessage',[
+        	'chat_id'=>$chat_id,
+        	'text'=>"✔️ پیام شما با موفقیت برای ارسال همگانی تنظیم شد",
+ ]);
+$connect->query("UPDATE `user` SET `step` = 'none' WHERE `id` = '$from_id' LIMIT 1");
+$connect->query("UPDATE `sendall` SET step = 'send' , `text` = '$text$caption' , `chat` = '$photo' LIMIT 1");			
+}
+elseif ($user['step'] == 'fortoall') {
+         bot('sendmessage',[
+        	'chat_id'=>$chat_id,
+        	'text'=>"✔️ پیام شما با موفقیت به عنوان فوروارد همگانی تنظیم شد",
+ ]);
+$connect->query("UPDATE `user` SET `step` = 'none' WHERE `id` = '$from_id' LIMIT 1");	
+$connect->query("UPDATE `sendall` SET `step` = 'forward' , `text` = '$message_id' , `chat` = '$chat_id' LIMIT 1");		
+}
+//===========================// answer //===========================
+elseif($update->message->text && $update->message->reply_to_message && $from_id == $admin[0]){
+	bot('sendmessage',[
+        'chat_id'=>$chat_id,
+        'text'=>'☑️ پاسخ شما برای فرد ارسال شد'
+		]);
+	bot('sendmessage',[
+        'chat_id'=>$update->message->reply_to_message->forward_from->id,
+        'text'=>"👮🏻 پاسخ پشتیبان برای شما : $text",
+		]);
+}
+//===========================// channel //===========================
+elseif($channel_post and $user['channel'] == true){
+  $amount = $user['view'] * $_seen;
+  if(mysqli_fetch_assoc(mysqli_query($connect,"SELECT * FROM `user` WHERE `id` = '{$user['id']}' LIMIT 1"))['coin'] >= $amount){
+  if($channel_post->audio != true){
+  $id = bot('ForwardMessage',[
+  'chat_id'=>"@$channelorder",
+  'from_chat_id'=>$channel_post_chat_id,
+  'message_id'=>$channel_post_message_id,
+  ])->result->message_id;
+  } else {
+  $id = $channel_post_message_id;
+  $channelorder = $channel_post_chat_username;
+  }  
+  $link = "https://t.me/$channelorder/$id";
+  $explode = explode('^',$user['speed']);  
+$result = curl("$webapi?apikey=$apikey&type=view&count={$user['view']}&start=$explode[0]&speed=$explode[1]&period=$explode[0]&channel=$channelorder&id=$id");
+  if($result->result == 'ok'){
+  $connect->query("UPDATE `user` SET `coin` = `coin` - $amount WHERE `id` = '{$user['id']}' LIMIT 1");
+  $startorder = ($explode[0] == 0)?'فوری':"بعد از $explode[0] دقیقه";
+  $speed = ($explode[1] == 0)?'حداکثر سرعت':"هر $explode[1] دقیقه $explode[2] بازدید";
+  bot('sendmessage',[
+'chat_id'=>$user['id'],
+'text'=>"☑️ سفارش بازدیدخودکار با شماره پیگیری {$result->order} ثبت شد .
+
+⚡️ سرعت تکمیل : $startorder و $speed 
+💰 هزینه سفارش : $amount تومان
+👁‍🗨 تعداد بازدید درخواستی : {$user['view']}
+👁 بازدید فعلی : {$result->seenstart} بازدید",
+]);
+  $connect->query("INSERT INTO `orderseen` (`key` , `id` , `amount` , `speed` , `view` , `link` , `time`) VALUES ('{$result->order}' ,'{$user['id']}' , '$amount' , '$speed' , '{$user['view']}' , '$link' , '".jdate('j F')." در ساعت ".jdate('H:i:s')."')");
+}else
+bot('sendmessage',[
+'chat_id'=>$user['id'],
+'text'=>'❗️ خطا ، پست شما نامعتبر است یا مشکلی در انجام سفارش ایجاد شده است
+
+👈🏻 توجه کنید که امکان ثبت سفارش بازدید خودکار برای پست موسیقی در کانال های خصوصی امکان پذیر نیست 
+👮🏻 در صورت بروز هرگونه مشکل و یا انجام نشدن سفارش کافیست با پشتیبانی در تماس باشید .',
+]);
+}else{
+$title = bot('getchat',['chat_id'=>$channel_post_chat_id])->result->title;
+bot('sendmessage',[
+'chat_id'=>$user['id'],
+'text'=>"❗️ سفارش بازدید خودکار برای کانال $title انجام نشد .
+
+✅ برای انجام سفارش باید حداقل $amount تومان موجودی داشته باشید .
+❌ برای حذف کانال /del_".abs($channel_post_chat_id)."",
+]);
+}
+}
+
+//===========================// main //===========================
+elseif($message){
+	bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>$start,
+'reply_to_message_id'=>$message_id,
+     'reply_markup'=>$home
+    		]);
+if($user['id'] != true) {
+	bot('sendmessage',[
+	'chat_id'=>$chat_id,
+	'text'=>$gift,
+    		]);
+$connect->query("INSERT INTO `user` (`id` , `coin`) VALUES ('$from_id' , '$_gift')");
+}
+$connect->query("UPDATE `user` SET `step` = 'none' WHERE `id` = '$from_id' LIMIT 1");
+}
+?>
